@@ -1,5 +1,5 @@
 import { initBot } from './bot'
-import { initMongo } from './db'
+import { initMongo } from './db/mongo'
 
 
 async function main(){

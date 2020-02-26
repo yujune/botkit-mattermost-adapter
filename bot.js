@@ -4,8 +4,8 @@ import BotOptions from './config/bot-options';
 import { helpConversation } from './conversations/help';
 import { ipWhitelistConversation } from './conversations/ip-whitelists';
 
-
-
+// import { ipWhitelistConversation } from './conversations/ip-whitelists';
+import BotkitStorageMongo from 'botkit-storage-mongo'
 
 // import debug from 'debug'
 export const initBot = async () => {
@@ -18,15 +18,16 @@ export const initBot = async () => {
 
     // the environment variables from RocketChat is passed in bot_options
     // because the module it's external, so haven't access to .env file
-    console.log('BotOptions: ', BotOptions)
     const controller = Botkit({}, BotOptions)
 
     helpConversation(controller)
     ipWhitelistConversation(controller)
+    
+    // ipWhitelistConversation(controller)
 
     // requireAll(require.context("./conversation", true, /^\.\/.*\.js$/))(controller);
     controller.startBot()
-    controller.startTicking()   
+    controller.startTicking()
 
     // This captures and evaluates any message sent to the bot as a DM
     // or sent to the bot in the form "@bot message" and passes it to
