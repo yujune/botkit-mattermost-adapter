@@ -8,7 +8,7 @@ export const helpConversation = async (controller) => {
 \`\`\`
 1. show ipwhitelist [ENV]
     - ENV defined name of environment or * (show all).
-2. add [IPs] [ENV]
+2. add ip [IPs] api [API] op [OP] env [ENV]
     - Add lists of IP in environment.
 3. remove ip [IPs] [ENV]
     - Remove lists of IP in environment.

@@ -1,10 +1,10 @@
 import { initBot } from './bot'
-import { initMongo } from './db/mongo'
+import { initPostgres } from './db/postgres'
 
 
 async function main(){
     try {
-        await initMongo();
+        await initPostgres();
     
         await initBot();
     } catch(ex) {
