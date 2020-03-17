@@ -7,43 +7,10 @@ import format from 'biguint-format'
 
 export const ipWhitelistConversation = async (controller) => {
     const locations = ["backoffice", "external", "frontend"]
+    const envLoc = "env"
     const expPrefix = "capture.req.hdr(0) -m end"
     controller.on('invalid_ip', (bot, message) => bot.reply(message, 'I don\'t understand! Your IP is invalid.', () => {}))
     controller.on('invalid_loc', (bot, message) => bot.reply(message, 'I don\'t understand! Your location is invalid.', () => {}))
-
-    controller.hears(['show ipwhitelist (.*)'], 'mention', async function(bot, message) {
-        const env = message.match[1];
-        let ipCount;
-        // SELECT *
-        // FROM botkit.backoffice AS bo, 
-        // botkit.external AS ex,
-        // botkit.frontend AS fe;
-        try {
-            let ipTables = await pgClient.query(`
-                SELECT * FROM
-                ${pgDB}.backoffice AS bo, ${pgDB}.external AS ex, ${pgDB}.frontend AS fe
-            `)
-            if(ipTables) {
-                ipCount = ipTables["rowCount"]
-            }
-        } catch(err) {
-            bot.reply(message, `There is an error query count ipwhitelist. ${err}`, () => {});          
-        }
-        if (!ipCount || ipCount === 0) {
-            bot.reply(message, 'There are no IP whitelists on your list. Say `add ip1,ip2,ip3 environment` to add something.', () => {});
-        } else {
-            let allDocuments;
-            try {
-                allDocuments = await pgClient.find({}).toArray();
-            } catch(err) {
-                bot.reply(message, `There is an error query all ipwhitelists. ${err}`, () => {});          
-            }
-            let text = null
-            if (env === "*") text = generateIPs(allDocuments);
-            else text = generateIPs(allDocuments.filter(e => e.env === env));
-            bot.reply(message, text, () => {});
-        }
-    });
 
     // listen for a user saying "add <something>", and then add it to the user's list
     // store the new list in the storage system
@@ -63,7 +30,7 @@ export const ipWhitelistConversation = async (controller) => {
                     if (d.loc === "frontend") uniqCol = "operator"
                     colNames = `${uniqCol}, ip, env_id`
                     if(d.loc === "backoffice") {
-                        colNames = `${colNames}, expression`
+                        colNames = `${colNames} ,expression`
                         colValues.push(d.exp)
                     }
                     if(colNames && colValues){
@@ -77,8 +44,11 @@ export const ipWhitelistConversation = async (controller) => {
                                 `
                                 await pgClient.query(textQ)
                             } else {
+                                let paramValues = colValues.map((cVal, cvIndex) => {
+                                    return `$${cvIndex + 1}`
+                                })
                                 textQ = `
-                                    INSERT INTO ${pgDB}.${d.loc}(${colNames}) VALUES($1,$2,$3)
+                                    INSERT INTO ${pgDB}.${d.loc}(${colNames}) VALUES(${paramValues.join(',')})
                                     ON CONFLICT (${uniqCol}) DO NOTHING
                                 `
                                 await pgClient.query(textQ, colValues)
@@ -135,7 +105,7 @@ export const ipWhitelistConversation = async (controller) => {
 
             try {
                 await insertToIPEnv({ ip, loc, env, exp, remarkOp })
-                convo.say(`Great! We had added \`${ip}\` for \`${op}\` on \`${env}\` environment`)
+                convo.say(`Great! We had added \`${ip}\` for \`${remarkOp}\` on \`${env}\` environment`)
             } catch(err) {
                 convo.say(`Error while adding... ${err}`)
             }
@@ -145,7 +115,6 @@ export const ipWhitelistConversation = async (controller) => {
         bot.startConversation(message, async (err, convo) => {
             convo.ask('Which environment?', async (response, convo) => {
                 convo.setVar('response_env', response.text)
-                convo.say('Cool, I like ' + response.text + ' too!')
                 convo.next()
                 convo.ask(`Where you want to be stored? \`(${locations.join(', ')})\``, async (response, convo) => {
                     if (!isLocationValid(response.text)) {
@@ -162,13 +131,11 @@ export const ipWhitelistConversation = async (controller) => {
                             convo.repeat()
                         } else {
                             convo.setVar('response_ip', ipResponse)
-                            convo.say('IP addresses? ' + response.text + ' ...sounds great!')
                         }
                         convo.next()
                         let reqCol
                         if (convo.vars.response_loc === "backoffice" || convo.vars.response_loc === "external") reqCol = "remark"
                         if (convo.vars.response_loc === "frontend") reqCol = "operator"
-
                         if(convo.vars.response_loc === "backoffice") {
                             convo.ask(`Do you have remark? \`(yes, no)\``, async (response, convo) => {
                                 if (response.text.toLowerCase() === 'yes') {
@@ -182,6 +149,7 @@ export const ipWhitelistConversation = async (controller) => {
                                         await handleComplete(convo)
                                     })
                                 }
+                                convo.next()
                             });
                         } else {
                             handleRemarkOp(convo, reqCol, async () => {
@@ -194,7 +162,101 @@ export const ipWhitelistConversation = async (controller) => {
         });
     });
 
-    
+    controller.hears(['IP Whitelists show location (.*)'], 'mention', async function(bot, message) {
+        convo.ask('Which environment?', async (response, convo) => {
+            convo.setVar('response_env', response.text)
+            convo.next()
+            convo.ask(`Which location wants to be show? \`(all, ${locations.join(', ')})\``, async (response, convo) => {
+                if (!isLocationValid(response.text)) {
+                    bot.botkit.trigger('invalid_loc', [bot, message])
+                    convo.repeat()
+                } else {
+                    convo.setVar('response_loc', response.text)
+                }
+                convo.next()
+                convo.ask(`Which remark wants to be show? \`(all)\``, async (response, convo) => {
+                    if (response.text.toLowerCase() === 'all') {
+                        handleRemarkOp(convo, reqCol, () => {
+                            handleExpression(convo, async () => {
+                                await handleComplete(convo)
+                            })
+                        })
+                    } else {
+                        handleExpression(convo, async () => {
+                            await handleComplete(convo)
+                        })
+                    }
+                    convo.next()
+                });
+                // convo.ask(`What IP you want to add? \`Use comma for multiple IP addresses.\``, async (response, convo) => {
+                //     let ipResponse = formatIPs(response.text)
+                //     if (isInvalidIPAddresses(ipResponse)) {
+                //         bot.botkit.trigger('invalid_ip', [bot, message])
+                //         convo.repeat()
+                //     } else {
+                //         convo.setVar('response_ip', ipResponse)
+                //         convo.say('IP addresses? ' + response.text + ' ...sounds great!')
+                //     }
+                //     convo.next()
+                //     let reqCol
+                //     if (convo.vars.response_loc === "backoffice" || convo.vars.response_loc === "external") reqCol = "remark"
+                //     if (convo.vars.response_loc === "frontend") reqCol = "operator"
+
+                //     if(convo.vars.response_loc === "backoffice") {
+                //         convo.ask(`Do you have remark? \`(yes, no)\``, async (response, convo) => {
+                //             if (response.text.toLowerCase() === 'yes') {
+                //                 handleRemarkOp(convo, reqCol, () => {
+                //                     handleExpression(convo, async () => {
+                //                         await handleComplete(convo)
+                //                     })
+                //                 })
+                //             } else {
+                //                 handleExpression(convo, async () => {
+                //                     await handleComplete(convo)
+                //                 })
+                //             }
+                //             convo.next()
+                //         });
+                //     } else {
+                //         handleRemarkOp(convo, reqCol, async () => {
+                //             await handleComplete(convo)
+                //         })
+                //     }
+                // })
+            });
+        });
+
+        function display() {
+            const loc = message.match[1];
+            let hasDocuments;
+            let allDocuments;
+            let envDoc;
+
+            try {
+                allDocuments = await queryAll()
+                envDoc = await getEnv()
+                if(allDocuments && allDocuments.length > 0) {
+                    hasDocuments = allDocuments.map(d => d.rowCount !== 0).includes(true)
+                }
+            } catch(err) {
+                bot.reply(message, `There is an error query count ipwhitelist. ${err}`, () => {});          
+            }
+            if (!hasDocuments) {
+                bot.reply(message, 'There are no IP whitelists on your list. Say `add ip1,ip2,ip3 environment` to add something.', () => {});
+            } else {
+                let text = null
+                if (loc === "*") text = generateDocuments(allDocuments, envDoc);
+                else text = generateDocuments(allDocuments.filter(doc => doc.location === loc), envDoc);
+                bot.reply(message, text, () => {});
+            }
+        }
+    });
+
+    controller.hears(['IP Whitelists update'], 'mention', async(bot, message) => {
+        bot.startConversation(message, async (err, convo) => {
+
+        })
+    })
 
     controller.hears(['remove env (.*)'],'mention', async (bot, message) => {
         const env = message.match[1];
@@ -264,18 +326,64 @@ export const ipWhitelistConversation = async (controller) => {
 
     // simple function to generate the text of the task list so that
     // it can be used in various places
-    function generateIPs(documents) {
+    function generateDocuments(documents, environments) {
         let text
-        documents.map(doc => {
-            text = ((text) ? text : '') + `*Environment: ${doc.env}*\n`;
-            if (doc['listIPs'] && doc['listIPs'].length > 0) {
-                doc['listIPs'].map(ip => {
-                    text = text + `> ${ip}\n`
-                })
-            }else{
-                text = text + ">Do not have any IP to whitelist\n"
-            }
-        })
+        if (environments['rows'] && environments['rows'].length > 0) {
+            environments['rows'].map(env => {
+                text = ((text) ? text : '') + `*Environment: ${env.name}*\n`;
+                if (documents && documents.length > 0) {
+                    documents.map(doc => {
+                        text = ((text) ? text : '') + `*Location: ${doc.location}*\n`;
+                        text = text + "```\n";
+                        if (doc['rows'] && doc['rows'].length > 0) {
+                            doc['rows'].map(row => {
+                                if (row.env_id === parseInt(env.id)) {
+                                    if (doc.location === "backoffice") {
+                                        text = `${text}#${row.remark}\n`
+                                        text = `${text}#Expression ${row.expression}\n`
+                                        // text = text + `**Remark**\n`;
+                                        // text = text + `> ${row.remark}\n`;
+                                        // text = text + `**Expression**\n`;
+                                        // text = text + `> ${row.expression}\n`;
+                                    }
+                                    if (doc.location === "external") {
+                                        text = `${text}#${row.remark}\n`
+                                        // text = `${text}Expression: ${row.expression}\n`
+    
+                                        // text = text + `**Remark**\n`;
+                                        // text = text + `> ${row.remark}\n`;
+                                    }
+                                    if (doc.location === "frontend") {
+                                        text = `${text}#${row.operator}\n`
+                                        // text = `${text}Expression: ${row.expression}\n`
+    
+                                        // text = text + `**Operator**\n`s;
+                                        // text = text + `> ${row.operator}\n`;
+                                    }
+                                    // text = text + `#IP \n`
+                                    if(row.ip && row.ip.length > 0) {
+                                        row.ip.map(ip => text = text + `- ${ip}\n`)
+                                    }
+                                    // text = text + `**IP**\n`
+                                    // if(row.ip && row.ip.length > 0) {
+                                    //     row.ip.map(ip => text = text + `> ${ip}\n`)
+                                    // }
+                                    text = text + "\n"
+                                }
+                            })
+                            text = text + "```\n";
+                        } else {
+                            text = text + ">Do not have any IP to whitelist\n"
+                        }
+                    })
+                } else {
+                    text = text + ">Do not have any documents\n"
+                }
+            })
+        } else {
+            text = text + ">Do not have any Environment\n"
+        }
+        
         return text
     }
 
@@ -316,6 +424,31 @@ export const ipWhitelistConversation = async (controller) => {
                     return null
                 }
             }
+        } catch(err) {
+            throw err;
+        }
+    }
+
+    async function getEnv() {
+        try {
+            return Promise.resolve(await pgClient.query(`SELECT * FROM ${pgDB}.${envLoc}`))
+        } catch(err) {
+            throw err;
+        }
+    }
+
+    async function queryAll() {
+        try {
+            return Promise.all(
+                locations.map(async loc => {
+                    return Promise.resolve(
+                        { 
+                            ...await pgClient.query(`SELECT * FROM ${pgDB}.${loc}`),
+                            location: loc
+                        }
+                    )
+                })
+            )
         } catch(err) {
             throw err;
         }
