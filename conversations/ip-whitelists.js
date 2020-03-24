@@ -7,15 +7,16 @@ import _ from 'lodash';
 // import { integrationId } from '@rocket.chat/sdk/dist/lib/settings';
 
 export const ipWhitelistConversation = async (controller) => {
-    const locations = ["backoffice", "external", "frontend"]
+    const services = ["backoffice", "external", "frontend"]
+    const environments = ["Prod Asia", "Prod Euro"]
     const envLoc = "env"
     const expPrefix = "capture.req.hdr(0) -m end"
     controller.on('terminate_message', (bot, message) => bot.reply(message, 'Ok Bye!', () => {}))
     controller.on('invalid_env', (bot, message) => bot.reply(message, 'I don\'t understand! Your environment is invalid.', () => {}))
-    controller.on('invalid_loc', (bot, message) => bot.reply(message, 'I don\'t understand! Your location is invalid.', () => {}))
+    controller.on('invalid_svc', (bot, message) => bot.reply(message, 'I don\'t understand! Your location is invalid.', () => {}))
     controller.on('invalid_ip', (bot, message) => bot.reply(message, 'I don\'t understand! Your IP is invalid.', () => {}))
     controller.on('missing_env', (bot, message) => bot.reply(message, 'Environment not found in database!', () => {}))
-    controller.on('missing_loc', (bot, message) => bot.reply(message, 'Location not found in database!', () => {}))
+    controller.on('missing_svc', (bot, message) => bot.reply(message, 'Location not found in database!', () => {}))
     controller.on('missing_remarkop', (bot, message) => bot.reply(message, 'Remark/Operation not found in database!', () => {}))
     controller.on('missing_ip', (bot, message) => bot.reply(message, 'IP not found in database!', () => {}))
     controller.on('missing_domain', (bot, message) => bot.reply(message, 'Domain not found in database!', () => {}))
@@ -55,9 +56,8 @@ export const ipWhitelistConversation = async (controller) => {
                             //     return `$${cvIndex + 1}`
                             // })
                             if ( d.loc === "backoffice" ) {
-                                colNames = `ip, env_id, expression, domain`
+                                colNames = `ip, env_id, domain`
                                 let colLength = colNames.split(',').length;
-                                colValues.push(d.exp)
 
                                 let backendValuesQ = []
                                 d.domains.split(',').map((domain) => {
@@ -86,7 +86,7 @@ export const ipWhitelistConversation = async (controller) => {
                                                         INSERT INTO ${pgDB}.${d.loc}(${colNames})
                                                         VALUES (${paramValues.join(',')})
                                                     `
-                                                    await pgClient.query(textQ, [`{${row.ip.join(',')}}`, envId, row.exp, row.domain])
+                                                    await pgClient.query(textQ, [`{${row.ip.join(',')}}`, envId, row.domain])
                                                 } else {
                                                     // Old
                                                     textQ = `
@@ -113,10 +113,7 @@ export const ipWhitelistConversation = async (controller) => {
                                 await pgClient.query(textQ, colValues)
                             }
                         }
-                        return Promise.resolve({
-                            addedIP: d.ip,
-                            addedDomain: d.domains
-                        })
+                        return Promise.resolve(true)
                     } catch(err) {
                         throw err;
                     }
@@ -173,10 +170,14 @@ export const ipWhitelistConversation = async (controller) => {
                 env: convo.vars.response_env
             })
             if (domainLists && domainLists.length > 0) convo.setVar('response_domain', domainLists.join(','))
+            
             if (domainToBeIgnore.length > 0) convo.setVar('response_domainToBeIgnore', domainToBeIgnore)
+            else convo.setVar('response_domainToBeIgnore', [])
+
             if (requestDomainToBeAdded.length > 0) {
                 let requestDomains = flattenDomains(requestDomainToBeAdded)
-                convo.ask(`[ADD] \`${requestDomains.join(',')}\` don\'t exists in database, do you want to create them? \`(yes,no)\``, async (response, convo) => {
+                convo.ask(`Below domains are not exists in our database, do you want to create them? (\`Yes\` / \`No\`)\n${requestDomains.map(d => `- ${d}\n`).join('')}`
+                    ,async (response, convo) => {
                     isTerminate(response, convo, bot, message)
                     convo.next()
                     if(response.text.trim().toLowerCase() === "yes") {
@@ -191,7 +192,7 @@ export const ipWhitelistConversation = async (controller) => {
         }
 
         function handleExpressionDomains(convo, callback) {
-            convo.ask(`[ADD] What Domains you want to add? \`Use comma for multiple domains.\``, async (response, convo) => {
+            convo.ask('Which domains you want to apply IP whitelist? (\`Use comma for multiple domains\`)', async (response, convo) => {
                 isTerminate(response, convo, bot, message)
                 let domainResp = formatDomains(response.text)
                 convo.next()
@@ -212,33 +213,51 @@ export const ipWhitelistConversation = async (controller) => {
             // let convoMessage;
             let domainMessage = '';
             let domainToBeAdded;
+            let confirmMsg
             if (isBackoffice) {
                 let listDomainsToBeAdded = []
+                let domainMsg;
                 if (domainRequestToBeAdd.length > 0) {
                     domainToBeAdded = domainRequestToBeAdd.concat(domainToBeIgnore)
                     listDomainsToBeAdded = flattenDomains(domainRequestToBeAdd);
+
+                    domainMsg = domainToBeAdded.reduce((msg, o, i) => {
+                        if (!o.id) msg = msg + `- domain: ${o.domain} (Will be created)\nIPs to add: ${o.ip.join(',')}\n\n`;
+                        else {
+                            if (o.existIPs && o.existIPs.length > 0) msg = msg + `- domain: ${o.domain}\nIPs to add: ${o.ip.join(',')}\nIPs existed (Which will not apply): ${o.existIPs.join(',')}\n\n`;
+                            else msg = msg + `- domain: ${o.domain}\nIPs to add: ${o.ip.join(',')}\n\n`;
+                        }
+                        return msg
+                    },'');
+                } else {
+                    let listOldDomains = flattenDomains(domainToBeIgnore)
+                    domainMsg = listOldDomains.map(d => `- domain: ${d} (Will be created)\nIPs to add: ${ip}\n\n`).join('')
                 }
-                let listOldDomains = flattenDomains(domainToBeIgnore)
-                domainMessage = [...new Set(listDomainsToBeAdded.concat(listOldDomains))].join(',')
+                confirmMsg = `**Confirmation**
+                    Environment: ${env}
+                    Service: ${loc}
+                    IP whitelist to apply:
+                        ${domainMsg}
+                    **Confirm Apply:** Yes or No?
+                `
             } else {
                 domainMessage = domains
+                confirmMsg = `**Confirmation**
+                    Environment: ${env}
+                    Service: ${loc}
+                    Operator: ${remarkOp}
+                    IP: ${ip}
+                    IP whitelist will be apply to following operators: ${domainMessage}
+                    **Confirm Apply:** Yes or No?
+                `
             }
-           
 
-            convo.ask(`**[APPLY CONFIRMATION]**
-                Environment: ${env}
-                Location: ${loc}
-                Operator: ${remarkOp}
-                Expression: ${exp}
-                IP: ${ip}
-                IP whitelist will be apply to following domains: ${domainMessage}
-                **Confirm Apply:** Yes or No?
-            `, async (response, convo) => {
+            convo.ask(confirmMsg, async (response, convo) => {
                 isTerminate(response, convo, bot, message)
                 try {
                     if(response.text.toLowerCase() === "yes") {
-                        const { addedIP, addedDomain } = await handleApply({ ip, loc, env, exp, remarkOp, domains, domainToBeAdded })
-                        convo.say(`Great! We had added \`${addedIP}\` and \`${addedDomain}\` for \`${remarkOp}\` on \`${env}\` environment`)
+                        await handleApply({ ip, loc, env, exp, remarkOp, domains, domainToBeAdded })
+                        convo.say(`Great! Confirmation had been made!`)
                     } else {
                         convo.stop();
                         bot.botkit.trigger('terminate_message', [bot, message])
@@ -252,7 +271,7 @@ export const ipWhitelistConversation = async (controller) => {
         }
 
         async function handleEnv(convo, callback) {
-            convo.ask('[ADD] Which environment? `(Prod Asia, Prod Euro)`', async (response, convo) => {
+            convo.ask(`Which environment?\n${environments.map(env => `- ${env}\n`).join('')}`, async (response, convo) => {
                 isTerminate(response, convo, bot, message)
                 convo.setVar('response_env', response.text)
                 convo.next()
@@ -260,21 +279,21 @@ export const ipWhitelistConversation = async (controller) => {
             })
         }
 
-        async function handleLocation(convo, callback) {
-            convo.ask(`[ADD] Where you want to be stored? \`(${locations.join(', ')})\``, async (response, convo) => {
+        async function handleService(convo, callback) {
+            convo.ask(`Which service you want to apply IP whitelist?\n${services.map(service => `- ${service}\n`).join('')}`, async (response, convo) => {
                 isTerminate(response, convo, bot, message)
-                const locationValid = isLocationValid(response.text);
-                if (!locationValid) {
-                    bot.botkit.trigger('invalid_loc', [bot, message])
+                const serviceValid = isServiceValid(response.text);
+                if (!serviceValid) {
+                    bot.botkit.trigger('invalid_svc', [bot, message])
                     convo.repeat()
                 } else convo.setVar('response_loc', response.text)
                 convo.next()
-                if(locationValid) callback();
+                if(serviceValid) callback();
             })
         }
 
         async function handleIPAddresses(convo, callback) {
-            convo.ask(`[ADD] What IP you want to add? \`Use comma for multiple IP addresses.\``, async (response, convo) => {
+            convo.ask(`What are the IPs you want to apply to these domains? (\`Use comma for multiple IPs\`)`, async (response, convo) => {
                 isTerminate(response, convo, bot, message)
                 let ipResponse = formatIPs(response.text)
                 const isInvalidIP = isInvalidIPAddresses(ipResponse);
@@ -305,23 +324,43 @@ export const ipWhitelistConversation = async (controller) => {
 
         bot.startConversation(message, async (err, convo) => {
             handleEnv(convo, () => {
-                handleLocation(convo, () => {
-                    handleIPAddresses(convo, () => {
-                        if (convo.vars.response_loc === "backoffice") {
-                            handleExpression(convo,  () => {
-                                handleExpressionDomains(convo, async (domainResp) => {
-                                    handleCheckDomains(convo, domainResp, async () => {
-                                        await handleComplete(convo, true)
-                                    })
+                handleService(convo, () => {
+                    // handleExpression(convo,  () => {
+                    handleExpressionDomains(convo, async (domainResp) => {
+                        handleIPAddresses(convo, () => {
+                            if (convo.vars.response_loc === "backoffice") {
+                                handleCheckDomains(convo, domainResp, async () => {
+                                    await handleComplete(convo, true)
                                 })
-                            })
-                        } else {
-                            handleRemarkOp(convo, async () => {
-
-                                await handleComplete(convo, false)
-                            })
-                        }
+                                //     })
+                                // })
+                            } else {
+                                handleRemarkOp(convo, async () => {
+    
+                                    await handleComplete(convo, false)
+                                })
+                            }
+                        })
                     })
+                    // })
+                    
+
+                    // handleIPAddresses(convo, () => {
+                    //     if (convo.vars.response_loc === "backoffice") {
+                    //         handleExpression(convo,  () => {
+                    //             handleExpressionDomains(convo, async (domainResp) => {
+                    //                 handleCheckDomains(convo, domainResp, async () => {
+                    //                     await handleComplete(convo, true)
+                    //                 })
+                    //             })
+                    //         })
+                    //     } else {
+                    //         handleRemarkOp(convo, async () => {
+
+                    //             await handleComplete(convo, false)
+                    //         })
+                    //     }
+                    // })
                 })
             });
         })
@@ -330,10 +369,10 @@ export const ipWhitelistConversation = async (controller) => {
             //     isTerminate(response, convo, bot, message)
             //     convo.setVar('response_env', response.text)
             //     convo.next()
-                // convo.ask(`[ADD] Where you want to be stored? \`(${locations.join(', ')})\``, async (response, convo) => {
+                // convo.ask(`[ADD] Where you want to be stored? \`(${services.join(', ')})\``, async (response, convo) => {
                 //     isTerminate(response, convo, bot, message)
-                //     if (!isLocationValid(response.text)) {
-                //         bot.botkit.trigger('invalid_loc', [bot, message])
+                //     if (!isServiceValid(response.text)) {
+                //         bot.botkit.trigger('invalid_svc', [bot, message])
                 //         convo.repeat()
                 //     } else {
                 //         convo.setVar('response_loc', response.text)
@@ -437,7 +476,7 @@ export const ipWhitelistConversation = async (controller) => {
         }
 
         async function handleIPAddress(convo, callback) {
-            convo.ask(`[REMOVE] What IP you want to remove? \`Use comma for multiple IP addresses.\``, async (response, convo) => {
+            convo.ask('What are the IPs you want to remove to these operator? (\`Use comma for multiple IPs\`)', async (response, convo) => {
                 isTerminate(response, convo, bot, message)
                 let ipResponse = formatIPs(response.text)
                 let existingIP;
@@ -463,7 +502,7 @@ export const ipWhitelistConversation = async (controller) => {
         }
 
         async function handleEnv(convo ,callback) {
-            convo.ask('[REMOVE] Which environment? `(Prod Asia, Prod Euro)`', async (response, convo) => {
+            convo.ask(`Which environment?\n${environments.map(env => `- ${env}\n`).join('')}`, async (response, convo) => {
                 isTerminate(response, convo, bot, message)
                 let envId = await getExistingEnv(response.text)
                 if (envId) {
@@ -477,16 +516,16 @@ export const ipWhitelistConversation = async (controller) => {
             });
         }
 
-        async function handleLocation(convo, callback) {
-            convo.ask(`[REMOVE] Where is the location? \`(${locations.join(', ')})\``, async (response, convo) => {
+        async function handleService(convo, callback) {
+            convo.ask(`Which service you want to remove IP whitelist?\n${services.map(service => `- ${service}\n`).join('')}`, async (response, convo) => {
                 isTerminate(response, convo, bot, message)
-                const locationValid = isLocationValid(response.text);
-                if (!locationValid) {
-                    bot.botkit.trigger('missing_loc', [bot, message])
+                const serviceValid = isServiceValid(response.text);
+                if (!serviceValid) {
+                    bot.botkit.trigger('missing_svc', [bot, message])
                     convo.repeat()
                 } else convo.setVar('response_loc', response.text)
                 convo.next()
-                if(locationValid) callback(response.text.trim().toLowerCase())
+                if(serviceValid) callback(response.text.trim().toLowerCase())
             })
         }
 
@@ -507,7 +546,7 @@ export const ipWhitelistConversation = async (controller) => {
         
         bot.startConversation(message, async (err, convo) => {
             handleEnv(convo, async() => {
-                handleLocation(convo, async(selectedLocation) => {
+                handleService(convo, async(selectedLocation) => {
                     if (selectedLocation === "backoffice") {
                         handleDomain(convo, async () => {
                             handleIPAddress(convo, async() => {
@@ -530,9 +569,9 @@ export const ipWhitelistConversation = async (controller) => {
         // convo.ask('Which environment?', async (response, convo) => {
         //     convo.setVar('response_env', response.text)
         //     convo.next()
-        //     convo.ask(`Which location wants to be show? \`(all, ${locations.join(', ')})\``, async (response, convo) => {
-        //         if (!isLocationValid(response.text)) {
-        //             bot.botkit.trigger('invalid_loc', [bot, message])
+        //     convo.ask(`Which location wants to be show? \`(all, ${services.join(', ')})\``, async (response, convo) => {
+        //         if (!isServiceValid(response.text)) {
+        //             bot.botkit.trigger('invalid_svc', [bot, message])
         //             convo.repeat()
         //         } else {
         //             convo.setVar('response_loc', response.text)
@@ -704,8 +743,8 @@ export const ipWhitelistConversation = async (controller) => {
         return (ipAddresses) ? ipAddresses.split(",").map(ip => isIp(ip)).includes(false) : false;
     }
 
-    function isLocationValid(inputLoc) {
-        return (locations && locations.length > 0) ? locations.includes(inputLoc.toLowerCase()) : false;
+    function isServiceValid(inputLoc) {
+        return (services && services.length > 0) ? services.includes(inputLoc.toLowerCase()) : false;
     }
 
     function formatIPs(ipAddresses) {
@@ -822,7 +861,7 @@ export const ipWhitelistConversation = async (controller) => {
         return domainFound
     }
 
-    async function checkExistingDomainsIP(domainResp, { ipResp, loc, env, exp }) {
+    async function checkExistingDomainsIP(domainResp, { ipResp, loc, env }) {
         let domainLists = domainResp.split(',');
         let ipLists = ipResp.split(',');
         let domainToBeIgnore =  [] // await queryDomains(domainLists, ipLists, 'old');
@@ -836,7 +875,8 @@ export const ipWhitelistConversation = async (controller) => {
                     domainToBeIgnore.push({
                         ...r2.rows[0],
                         domain,
-                        ip: uniqListIP
+                        ip: uniqListIP,
+                        existIPs: ipLists.filter(inputIP => !uniqListIP.includes(inputIP))
                     })
                 } else {
                     requestDomainToBeAdded.push(domain)
@@ -847,8 +887,7 @@ export const ipWhitelistConversation = async (controller) => {
             return { 
                 domain: newDomain,
                 ip: ipLists,
-                env,
-                exp
+                env
             }
         })
         return { domainLists, domainToBeIgnore, requestDomainToBeAdded }
@@ -878,7 +917,7 @@ export const ipWhitelistConversation = async (controller) => {
     async function queryAll() {
         try {
             return Promise.all(
-                locations.map(async loc => {
+                services.map(async loc => {
                     return Promise.resolve(
                         { 
                             ...await pgClient.query(`SELECT * FROM ${pgDB}.${loc}`),
