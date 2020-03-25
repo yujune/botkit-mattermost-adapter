@@ -47,14 +47,6 @@ export const ipWhitelistConversation = async (controller) => {
                             let colValues = [`{${d.ip}}`, envId];
                             let paramValues;
                             colNames = `operator, ip, env_id`
-                            // if ( d.loc === "backoffice" ) {
-                            //     colNames = `ip, env_id, expression, domain`
-                            //     colValues.push(d.exp)
-                            //     // colValues.push(`{${d.domains}}`)
-                            // }
-                            // paramValues = colValues.map((cVal, cvIndex) => {
-                            //     return `$${cvIndex + 1}`
-                            // })
                             if ( d.loc === "backoffice" ) {
                                 colNames = `ip, env_id, domain`
                                 let colLength = colNames.split(',').length;
@@ -141,7 +133,7 @@ export const ipWhitelistConversation = async (controller) => {
         }
 
         function handleRemarkOp(convo, callback) {
-            convo.ask(`[ADD] Which operator?`, (response, convo) => {
+            convo.ask(`Which operator you want to apply IP whitelist?`, (response, convo) => {
                 isTerminate(response, convo, bot, message)
                 convo.setVar('response_remark_op', response.text)
                 convo.next()
@@ -163,10 +155,9 @@ export const ipWhitelistConversation = async (controller) => {
         }
 
         async function handleCheckDomains(convo, domainResp, callback) {
-            const { domainLists, domainToBeIgnore, requestDomainToBeAdded } = await checkExistingDomainsIP(domainResp, { 
+            const { domainLists, domainToBeIgnore, requestDomainToBeAdded } = await handleResultDomainIP(domainResp, { 
                 ipResp: convo.vars.response_ip,
-                loc: convo.vars.response_loc,
-                exp: convo.vars.response_domain_exp,
+                svc: convo.vars.response_svc,
                 env: convo.vars.response_env
             })
             if (domainLists && domainLists.length > 0) convo.setVar('response_domain', domainLists.join(','))
@@ -176,15 +167,16 @@ export const ipWhitelistConversation = async (controller) => {
 
             if (requestDomainToBeAdded.length > 0) {
                 let requestDomains = flattenDomains(requestDomainToBeAdded)
-                convo.ask(`Below domains are not exists in our database, do you want to create them? (\`Yes\` / \`No\`)\n${requestDomains.map(d => `- ${d}\n`).join('')}`
-                    ,async (response, convo) => {
-                    isTerminate(response, convo, bot, message)
-                    convo.next()
-                    if(response.text.trim().toLowerCase() === "yes") {
-                        convo.setVar('response_domainRequestToBeAdd', requestDomainToBeAdded)
-                    }   
-                    callback();          
-                });
+                convo.ask(`Below domains are not exists in our database, do you want to create them? (\`Yes\` / \`No\`)\n${requestDomains.map(d => `- ${d}\n`).join('')}`,
+                    async (response, convo) => {
+                        isTerminate(response, convo, bot, message)
+                        convo.next()
+                        if(response.text.trim().toLowerCase() === "yes") {
+                            convo.setVar('response_domainRequestToBeAdd', requestDomainToBeAdded)
+                        }   
+                        callback();          
+                    }
+                );
             } else {
                 convo.next()
                 callback();
@@ -203,7 +195,7 @@ export const ipWhitelistConversation = async (controller) => {
         async function handleComplete(convo, isBackoffice) {
             const env = convo.vars.response_env;
             const ip = convo.vars.response_ip;
-            const loc = convo.vars.response_loc;
+            const loc = convo.vars.response_svc;
             const exp = convo.vars.response_domain_exp || 'None'
             const domains = convo.vars.response_domain || 'None'
             const remarkOp = convo.vars.response_remark_op || 'None'
@@ -238,7 +230,7 @@ export const ipWhitelistConversation = async (controller) => {
                     Service: ${loc}
                     IP whitelist to apply:
                         ${domainMsg}
-                    **Confirm Apply:** Yes or No?
+                    ANSWER \`Yes\` TO APPLY, OR WILL CANCEL!
                 `
             } else {
                 domainMessage = domains
@@ -248,7 +240,7 @@ export const ipWhitelistConversation = async (controller) => {
                     Operator: ${remarkOp}
                     IP: ${ip}
                     IP whitelist will be apply to following operators: ${domainMessage}
-                    **Confirm Apply:** Yes or No?
+                    ANSWER \`Yes\` TO APPLY, OR WILL CANCEL!
                 `
             }
 
@@ -286,7 +278,7 @@ export const ipWhitelistConversation = async (controller) => {
                 if (!serviceValid) {
                     bot.botkit.trigger('invalid_svc', [bot, message])
                     convo.repeat()
-                } else convo.setVar('response_loc', response.text)
+                } else convo.setVar('response_svc', response.text)
                 convo.next()
                 if(serviceValid) callback();
             })
@@ -306,34 +298,16 @@ export const ipWhitelistConversation = async (controller) => {
             });
         }
 
-        function filterExistingIPDomain(){
-
-        }
-
-
-
-        // async function handleRequestRemark(convo, callback) {
-        //     convo.ask(`[ADD] Do you have remark? \`(yes, no)\``, async (response, convo) => {
-        //         isTerminate(response, convo, bot, message);
-        //         convo.next();
-        //         callback(response);
-        //     });
-        // }
-
-        // function handleRequestExpression
-
         bot.startConversation(message, async (err, convo) => {
             handleEnv(convo, () => {
                 handleService(convo, () => {
                     // handleExpression(convo,  () => {
                     handleExpressionDomains(convo, async (domainResp) => {
                         handleIPAddresses(convo, () => {
-                            if (convo.vars.response_loc === "backoffice") {
+                            if (convo.vars.response_svc === "backoffice") {
                                 handleCheckDomains(convo, domainResp, async () => {
                                     await handleComplete(convo, true)
                                 })
-                                //     })
-                                // })
                             } else {
                                 handleRemarkOp(convo, async () => {
     
@@ -346,7 +320,7 @@ export const ipWhitelistConversation = async (controller) => {
                     
 
                     // handleIPAddresses(convo, () => {
-                    //     if (convo.vars.response_loc === "backoffice") {
+                    //     if (convo.vars.response_svc === "backoffice") {
                     //         handleExpression(convo,  () => {
                     //             handleExpressionDomains(convo, async (domainResp) => {
                     //                 handleCheckDomains(convo, domainResp, async () => {
@@ -375,7 +349,7 @@ export const ipWhitelistConversation = async (controller) => {
                 //         bot.botkit.trigger('invalid_svc', [bot, message])
                 //         convo.repeat()
                 //     } else {
-                //         convo.setVar('response_loc', response.text)
+                //         convo.setVar('response_svc', response.text)
                 //     }
                 //     convo.next()
 
@@ -400,9 +374,9 @@ export const ipWhitelistConversation = async (controller) => {
     controller.hears(['remove'], 'mention', async(bot, message) => {
         function handleRemarkOp(convo, callback) {
             // const remarkOpCol = "operator"
-            convo.ask(`[REMOVE] Which operator?`, async (response, convo) => {
+            convo.ask(`Which operator you want to remove IP whitelist?`, async (response, convo) => {
                 isTerminate(response, convo, bot, message)
-                const remarkExists = await isRemarkOpExists(response.text, convo.vars.response_loc, remarkOpCol);
+                const remarkExists = await isRemarkOpExists(response.text, convo.vars.response_svc, remarkOpCol);
                 if (remarkExists) {
                     convo.setVar('response_remark_op', response.text)
                 } else {
@@ -414,24 +388,26 @@ export const ipWhitelistConversation = async (controller) => {
             });
         }
 
-        async function handleRemove(ipAddresses, loc, remarkOp, domains) {
+        async function handleRemove(ipAddresses, svc, remarkOp, domains) {
             try {
                 await Promise.all(
                     ipAddresses.map(async ip => {
                         let textQ;
-                        if (loc === "backoffice") {
+                        if (svc === "backoffice") {
                             await Promise.all(
-                                domains.map(async domain => {
-                                    textQ = `
-                                        UPDATE ${pgDB}.${loc}
-                                        SET ip = array_remove(ip,'${ip}') WHERE domain = '${domain}'
-                                    `
-                                    await pgClient.query(textQ)
+                                domains.map(async d => {
+                                    if (d.id) {
+                                        textQ = `
+                                            UPDATE ${pgDB}.${svc}
+                                            SET ip = array_remove(ip,'${ip}') WHERE domain = '${d.domain}'
+                                        `
+                                        await pgClient.query(textQ)
+                                    }
                                 })
                             )
                         } else {
                             textQ = `
-                                UPDATE ${pgDB}.${loc}
+                                UPDATE ${pgDB}.${svc}
                                 SET ip = array_remove(ip,'${ip}') WHERE operator = '${remarkOp}'
                             `
                             await pgClient.query(textQ)
@@ -447,22 +423,59 @@ export const ipWhitelistConversation = async (controller) => {
         async function handleCompleteRemove(convo) {
             const env = convo.vars.response_env;
             const ipAddresses = convo.vars.response_ip;
-            const loc = convo.vars.response_loc;
+            const svc = convo.vars.response_svc;
             const remarkOp = convo.vars.response_remark_op;
-            const domains = convo.vars.response_domain || null;
-            convo.ask(`**[DELETE CONFIRMATION]**
-                Environment: ${env}
-                Location: ${loc}
-                Remark/Operation: ${remarkOp}
-                IP: ${ipAddresses.join(',')} **(TO BE DELETE)**
-                Domains: ${(domains === null) ? 'None' : domains.join(',')}
-                **Confirm Delete:** Yes or No?
-            `, async (response, convo) => {
+            let domains = convo.vars.response_domain || null;
+
+            let confirmMsg = '';
+            if (svc === "backoffice") {
+                const { domainIPToBeRemove, domainMissing } = await handleResultDomainIP(domains.join(','), { 
+                    ipResp: ipAddresses.join(','),
+                    svc,
+                    env
+                }, 'remove')
+
+                // let listDomainsToBeAdded = []
+                let removeMsg = ''
+                let listDomainIPToBeRemove = domainIPToBeRemove.concat(domainMissing)
+                if (listDomainIPToBeRemove.length > 0) {
+                    removeMsg = listDomainIPToBeRemove.reduce((msg, o, i) => {
+                        if (!o.id) msg = msg + `- domain: ${o.domain} (Not exists, won't change)\n\n`;
+                        else {
+                            if (o.notExistIPs && o.notExistIPs.length > 0) msg = msg + `- domain: ${o.domain}\nIPs to remove: ${o.ip.join(',')}\nIPs not exists (Which will not delete): ${o.notExistIPs.join(',')}\n\n`;
+                            else msg = msg + `- domain: ${o.domain}\nIPs to remove: ${o.ip.join(',')}\n\n`;
+                        }
+                        return msg
+                    },'');
+                } else {
+                    let listOldDomains = flattenDomains(domainToBeIgnore)
+                    removeMsg = listOldDomains.map(d => `- domain: ${d} (Not exists, won't change)\n\n`).join('')
+                }
+
+                domains = _.cloneDeep(listDomainIPToBeRemove)
+                confirmMsg = `**Confirmation**
+                    Environment: ${env}
+                    Service: ${svc}
+                    IP whitelist to apply:
+                        ${removeMsg}
+                    ANSWER \`Yes\` TO APPLY, OR WILL CANCEL!
+                `
+            } else {
+                confirmMsg = `**[DELETE CONFIRMATION]**
+                    Environment: ${env}
+                    Location: ${svc}
+                    Remark/Operation: ${remarkOp}
+                    IP: ${ipAddresses.join(',')} **(TO BE DELETE)**
+                    Domains: ${(domains === null) ? 'None' : domains.join(',')}
+                    ANSWER \`Yes\` TO APPLY, OR WILL CANCEL!
+                `
+            }
+            convo.ask(confirmMsg, async (response, convo) => {
                 isTerminate(response, convo, bot, message)
                 try {
                     if(response.text.toLowerCase() === "yes") {
-                        await handleRemove(ipAddresses, loc, remarkOp, domains)
-                        convo.say(`Great! We had removed \`${ipAddresses}\` for \`${remarkOp}\` on \`${loc}\` in\`${env}\` environment`)
+                        await handleRemove(ipAddresses, svc, remarkOp, domains)
+                        convo.say(`Great! Remove confirmation had been made!`)
                     } else {
                         convo.stop();
                         bot.botkit.trigger('terminate_message', [bot, message])
@@ -484,10 +497,10 @@ export const ipWhitelistConversation = async (controller) => {
                     bot.botkit.trigger('invalid_ip', [bot, message])
                     convo.repeat()
                 } else {
-                    if (convo.vars.response_loc === "backoffice") {
-                        existingIP =  await hasExistingIP(ipResponse, convo.vars.response_loc, convo.vars.response_domain);
+                    if (convo.vars.response_svc === "backoffice") {
+                        existingIP =  await hasExistingIP(ipResponse, convo.vars.response_svc, convo.vars.response_domain);
                     } else {
-                        existingIP =  await hasExistingIP(ipResponse, convo.vars.response_loc, convo.vars.response_remark_op);
+                        existingIP =  await hasExistingIP(ipResponse, convo.vars.response_svc, convo.vars.response_remark_op);
                     }
                     
                     if (existingIP) convo.setVar('response_ip', ipResponse.split(','))
@@ -523,17 +536,17 @@ export const ipWhitelistConversation = async (controller) => {
                 if (!serviceValid) {
                     bot.botkit.trigger('missing_svc', [bot, message])
                     convo.repeat()
-                } else convo.setVar('response_loc', response.text)
+                } else convo.setVar('response_svc', response.text)
                 convo.next()
                 if(serviceValid) callback(response.text.trim().toLowerCase())
             })
         }
 
         async function handleDomain(convo, callback) {
-            convo.ask(`[REMOVE] Where is the domain? \`Use comma for multiple domains.\``, async (response, convo) => {
+            convo.ask(`Which domains you want to remove IP whitelist? (\`Use comma for multiple domains\`)`, async (response, convo) => {
                 isTerminate(response, convo, bot, message)
                 let domainResp = formatDomains(response.text);
-                const domainValid = hasExistingDomains(domainResp.split(','), convo.vars.response_loc);
+                const domainValid = hasExistingDomains(domainResp.split(','), convo.vars.response_svc);
                 
                 if (!domainValid) {
                     bot.botkit.trigger('missing_domain', [bot, message])
@@ -566,69 +579,6 @@ export const ipWhitelistConversation = async (controller) => {
     })
 
     controller.hears(['show'], 'mention', async function(bot, message) {
-        // convo.ask('Which environment?', async (response, convo) => {
-        //     convo.setVar('response_env', response.text)
-        //     convo.next()
-        //     convo.ask(`Which location wants to be show? \`(all, ${services.join(', ')})\``, async (response, convo) => {
-        //         if (!isServiceValid(response.text)) {
-        //             bot.botkit.trigger('invalid_svc', [bot, message])
-        //             convo.repeat()
-        //         } else {
-        //             convo.setVar('response_loc', response.text)
-        //         }
-        //         convo.next()
-        //         convo.ask(`Which remark wants to be show? \`(all)\``, async (response, convo) => {
-        //             if (response.text.toLowerCase() === 'all') {
-        //                 handleRemarkOp(convo, reqCol, () => {
-        //                     handleExpression(convo, async () => {
-        //                         await handleComplete(convo)
-        //                     })
-        //                 })
-        //             } else {
-        //                 handleExpression(convo, async () => {
-        //                     await handleComplete(convo)
-        //                 })
-        //             }
-        //             convo.next()
-        //         });
-        //         // convo.ask(`What IP you want to add? \`Use comma for multiple IP addresses.\``, async (response, convo) => {
-        //         //     let ipResponse = formatIPs(response.text)
-        //         //     if (isInvalidIPAddresses(ipResponse)) {
-        //         //         bot.botkit.trigger('invalid_ip', [bot, message])
-        //         //         convo.repeat()
-        //         //     } else {
-        //         //         convo.setVar('response_ip', ipResponse)
-        //         //         convo.say('IP addresses? ' + response.text + ' ...sounds great!')
-        //         //     }
-        //         //     convo.next()
-        //         //     let reqCol
-        //         //     if (convo.vars.response_loc === "backoffice" || convo.vars.response_loc === "external") reqCol = "remark"
-        //         //     if (convo.vars.response_loc === "frontend") reqCol = "operator"
-
-        //         //     if(convo.vars.response_loc === "backoffice") {
-        //         //         convo.ask(`Do you have remark? \`(yes, no)\``, async (response, convo) => {
-        //         //             if (response.text.toLowerCase() === 'yes') {
-        //         //                 handleRemarkOp(convo, reqCol, () => {
-        //         //                     handleExpression(convo, async () => {
-        //         //                         await handleComplete(convo)
-        //         //                     })
-        //         //                 })
-        //         //             } else {
-        //         //                 handleExpression(convo, async () => {
-        //         //                     await handleComplete(convo)
-        //         //                 })
-        //         //             }
-        //         //             convo.next()
-        //         //         });
-        //         //     } else {
-        //         //         handleRemarkOp(convo, reqCol, async () => {
-        //         //             await handleComplete(convo)
-        //         //         })
-        //         //     }
-        //         // })
-        //     });
-        // });
-
         async function display() {
             const loc = message.match[1];
             let hasDocuments;
@@ -861,36 +811,52 @@ export const ipWhitelistConversation = async (controller) => {
         return domainFound
     }
 
-    async function checkExistingDomainsIP(domainResp, { ipResp, loc, env }) {
+    async function handleResultDomainIP(domainResp, { ipResp, svc, env }, handleType) {
         let domainLists = domainResp.split(',');
         let ipLists = ipResp.split(',');
         let domainToBeIgnore =  [] // await queryDomains(domainLists, ipLists, 'old');
-        let requestDomainToBeAdded = [] // await queryDomains(domainLists, ipLists, 'new', domainToBeIgnore);
+        let requestDomain = [] // await queryDomains(domainLists, ipLists, 'new', domainToBeIgnore);
         let uniqListIP = [];
         await Promise.all(
             domainLists.map(async domain => {
-                let r2 = await pgClient.query(`SELECT * FROM ${pgDB}.${loc} WHERE domain = '${domain}'`)
+                let r2 = await pgClient.query(`SELECT * FROM ${pgDB}.${svc} WHERE domain = '${domain}'`)
                 if ( r2 && r2.rowCount > 0) {
-                    if(uniqListIP.length === 0) uniqListIP = ipLists.filter(ip =>!r2.rows[0].ip.includes(ip))
-                    domainToBeIgnore.push({
-                        ...r2.rows[0],
-                        domain,
-                        ip: uniqListIP,
-                        existIPs: ipLists.filter(inputIP => !uniqListIP.includes(inputIP))
-                    })
+                    if ( handleType === 'remove' ) {
+                        if(uniqListIP.length === 0) uniqListIP = ipLists.filter(ip =>r2.rows[0].ip.includes(ip))
+                        domainToBeIgnore.push({
+                            ...r2.rows[0],
+                            domain,
+                            ip: uniqListIP,
+                            notExistIPs: _.difference(ipLists, uniqListIP)
+                        })
+                    } else {
+                        if(uniqListIP.length === 0) uniqListIP = ipLists.filter(ip =>!r2.rows[0].ip.includes(ip))
+                        domainToBeIgnore.push({
+                            ...r2.rows[0],
+                            domain,
+                            ip: uniqListIP,
+                            existIPs: ipLists.filter(inputIP => !uniqListIP.includes(inputIP))
+                        })
+                    }
                 } else {
-                    requestDomainToBeAdded.push(domain)
+                    requestDomain.push(domain)
                 }
             })
         )
-        requestDomainToBeAdded = requestDomainToBeAdded.map(newDomain => {
-            return { 
-                domain: newDomain,
-                ip: ipLists,
-                env
-            }
-        })
-        return { domainLists, domainToBeIgnore, requestDomainToBeAdded }
+        
+        if( handleType === 'remove' ) {
+            return { domainLists, domainIPToBeRemove: domainToBeIgnore, domainMissing: requestDomain.map(d => { return { domain: d } }) }
+        }
+        else {
+            requestDomain = requestDomain.map(newDomain => {
+                return { 
+                    domain: newDomain,
+                    ip: ipLists,
+                    env
+                }
+            })
+            return { domainLists, domainToBeIgnore, requestDomainToBeAdded: requestDomain }
+        }
     }
 
     // function getRemarkOpByLoc(location) {
