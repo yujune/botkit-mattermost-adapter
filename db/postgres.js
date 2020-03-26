@@ -15,8 +15,4 @@ export const initPostgres = async () => {
     } catch(err) {
         console.log('connecting postgres client: ', err)
     }
-    
-    // Check if IP table exists
-
-    // If doesn't exists, auto create
 }
