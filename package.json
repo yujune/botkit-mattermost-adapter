@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@rocket.chat/sdk": "^0.2.9-2",
+    "botkit": "^4.10.0",
+    "dotenv": "^8.2.0"
+  },
+  "scripts": {
+    "start": "tsc && node dist/bot.js"
+  }
+}
