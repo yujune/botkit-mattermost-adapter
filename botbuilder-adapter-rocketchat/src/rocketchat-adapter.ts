@@ -4,7 +4,7 @@ import { driver, api } from '@rocket.chat/sdk';
 import { IMessage } from '@rocket.chat/sdk/dist/config/messageInterfaces';
 import { RocketChatBotWorker } from './rocketchat-bot-worker';
 import { RocketChatAdapterOptions } from './rocketchat-adapter-options';
-import { RocketChatRoomType, RocketChatExitCode } from './rocketchat-data-types';
+import { RocketChatRoomType, RocketChatEvent, RocketChatExitCode } from './rocketchat-data-types';
 
 
 /**
@@ -227,33 +227,66 @@ export class RocketChatAdapter extends BotAdapter {
         // that the bot only can answer when mentioned. But
         // `driver.respondToMessages` didn't filter correctly, so we filter
         // it here.
-        if (rcRoomType === RocketChatRoomType.Room ||
+        if (rcRoomType === RocketChatRoomType.Channel ||
+            rcRoomType === RocketChatRoomType.Room    ||
             rcRoomType === RocketChatRoomType.Unknown)
         {
-            console.warn('[Receive Message] Invalid room type, ignore');
+            console.warn(`[Receive Message] Invalid room type: ${rcRoomType}, ignore`);
             return;
         }
 
         // Convert RocketChat message to Botkit activity object.
-        // @ts-ignore ignore missing fields
         let activity = {
             id:           message._id,
-            type:         ActivityTypes.Message,
-            conversation: { id: message._id },
             timestamp:    message.ts.$date,
-            from:         { id: message.u._id, name: message.u.username },
             channelId:    message.rid,
-            text:         message.msg,
+            from:         { id: message.u._id, name: message.u.username },
         } as Activity;
 
-        // We set `recipient` to identify this message comes from a private
-        // group and mentioned the bot.
-        if (rcRoomType === RocketChatRoomType.Mention)
-            activity.recipient = { id: this.rcBotInfo._id, name: this.rcBotInfo.username };
-
-        if (message.editedBy)
+        if (rcRoomType == RocketChatRoomType.Event)
         {
-            activity.type = ActivityTypes.MessageUpdate;
+            switch (message.t)
+            {
+                // Invite
+                case 'au':
+                    activity.type = RocketChatEvent.Invite;
+                    break;
+                // Kick
+                case 'ru':
+                    activity.type = RocketChatEvent.Kick;
+                    break;
+                // Others
+                default:
+                    activity.type = RocketChatEvent.Unknown;
+            }
+            if (this.rcRoomInfo.hasOwnProperty(message.rid))
+            {
+                activity.channelData = this.rcRoomInfo[message.rid];
+                // @ts-ignore
+                activity.rcEvent = {
+                    from: { id: message.u._id, name: message.u.username },
+                    to:   { id: '', name: message.msg } // There is no receiver userId.
+                };
+            }
+        }
+        else
+        {
+            activity.type = ActivityTypes.Message;
+            if (message.editedBy)
+                activity.type = ActivityTypes.MessageUpdate;
+
+            // We set `recipient` to identify this message comes from a private
+            // group and mentioned the bot.
+            if (rcRoomType === RocketChatRoomType.ChannelAndMention ||
+                rcRoomType === RocketChatRoomType.RoomAndMention)
+            {
+                activity.recipient = {   id: this.rcBotInfo._id,
+                                       name: this.rcBotInfo.username };
+            }
+
+            // @ts-ignore ignore missing fields
+            activity.conversation = { id: message._id };
+            activity.text = message.msg;
         }
 
         if (message.attachments)
@@ -267,7 +300,7 @@ export class RocketChatAdapter extends BotAdapter {
             });
         }
 
-        const context = new TurnContext(this, activity as Activity);
+        const context = new TurnContext(this, activity);
         this.runMiddleware(context, logic)
             .catch((error) => {
                 this.errorHandler('Failed to run middleware', error);
@@ -304,6 +337,12 @@ export class RocketChatAdapter extends BotAdapter {
     private getRocketChatRoomType(rcMessage: any, rcRoom: any): RocketChatRoomType {
         let messageType = RocketChatRoomType.Unknown;
 
+        // When groupable is defined, and its value equals to false,
+        // it's an event message, like XXX joined channel, XXX removed by YYY etc.
+        if (rcMessage.hasOwnProperty('groupable') &&
+            rcMessage.groupable === false)
+            return RocketChatRoomType.Event;
+
         let rcRoomType = rcRoom.roomType;
         let msgMentions = rcMessage.mentions;
 
@@ -320,13 +359,20 @@ export class RocketChatAdapter extends BotAdapter {
         }
         else if (rcRoomType === 'c')
         {
-            messageType = RocketChatRoomType.Channel;
+            if (this.isMentionBot(msgMentions))
+            {
+                messageType = RocketChatRoomType.ChannelAndMention;
+            }
+            else
+            {
+                messageType = RocketChatRoomType.Channel;
+            }
         }
         else if (rcRoomType === 'p')
         {
             if (this.isMentionBot(msgMentions))
             {
-                messageType = RocketChatRoomType.Mention;
+                messageType = RocketChatRoomType.RoomAndMention;
             }
             else
             {

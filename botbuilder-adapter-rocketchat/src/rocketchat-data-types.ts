@@ -1,10 +1,18 @@
 export enum RocketChatRoomType {
-    DirectChat,  // 'd'
-    LiveChat,    // 'l'
-    Channel,     // 'c'
-    Room,        // 'p'
-    Mention,     // 'p' and mentioned
-    Unknown      // default
+    DirectChat        = "DirectChat",         // 'd'
+    LiveChat          = "LiveChat",           // 'l'
+    Channel           = "Channel",            // 'c'
+    ChannelAndMention = "ChannelAndMention", // 'c' and mentioned
+    Room              = "Room",              // 'p'
+    RoomAndMention    = "RoomAndMention",    // 'p' and mentioned
+    Event             = "Event",             // RocketChat events
+    Unknown           = "Unknown",           // default
+}
+
+export enum RocketChatEvent {
+    Invite  = "invite",
+    Kick    = "kick",
+    Unknown = "unknown"
 }
 
 export enum RocketChatExitCode {
