@@ -5,6 +5,9 @@
     "dotenv": "^8.2.0"
   },
   "scripts": {
-    "start": "tsc && node dist/bot.js"
+    "start": "./node_modules/.bin/tsc && node dist/bot.js"
+  },
+  "devDependencies": {
+    "typescript": "^4.0.5"
   }
 }
