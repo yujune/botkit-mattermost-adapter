@@ -20,11 +20,9 @@ const controller = new Botkit({
 
 controller.ready(() => {
 
-    controller.hears('.*', 'message', async(bot, message) => {
-        await bot.reply(message, 'I hear: ' + message.text);
-    });
+    controller.loadModules(__dirname + '/features');
 
-    controller.on(RocketChatEvent.Invite, async(bot, event) => {
+    controller.on(RocketChatEvent.Invite, async (bot, event) => {
         // @ts-ignore
         let eventDetail = event.incoming_message.rcEvent;
         let inviter = eventDetail.from.name;
@@ -33,7 +31,7 @@ controller.ready(() => {
         await bot.say(`${inviter} invite ${invited} to room: #${channel}`)
     });
 
-    controller.on(RocketChatEvent.Kick, async(bot, event) => {
+    controller.on(RocketChatEvent.Kick, async (bot, event) => {
         // @ts-ignore
         let eventDetail = event.incoming_message.rcEvent;
         let kicker = eventDetail.from.name;
