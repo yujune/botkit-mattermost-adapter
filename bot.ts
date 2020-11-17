@@ -5,7 +5,8 @@ import { parseConfig } from './botbuilder-adapter-rocketchat/src/rocketchat-adap
  * NOTE: THIS SCRIPT NEED TO RUN BEFORE IMPORT @rocket.chat/sdk,
  * OR ROCKETCHAT API WON'T WORKS DUE TO ENVIRONMENT VARIABLES NOT SET.
  */
-require('dotenv').config();
+import * as dotenv from 'dotenv';
+dotenv.config();
 import { RocketChatAdapter } from './botbuilder-adapter-rocketchat/src/rocketchat-adapter';
 import { RocketChatEvent } from './botbuilder-adapter-rocketchat/src/rocketchat-data-types';
 
@@ -19,6 +20,8 @@ const controller = new Botkit({
 });
 
 controller.ready(() => {
+
+    controller.loadModules(__dirname + '/features');
 
     controller.hears('.*', 'message', async(bot, message) => {
         await bot.reply(message, 'I hear: ' + message.text);

@@ -69,10 +69,10 @@ export class RocketChatAdapter extends BotAdapter {
     /**
      * Standard BotBuilder adapter method to resumes a conversation with a user
      * asynchronously , possibly after some time has gone by.
-     * @param ref
-     * @param callback
+     * @param reference
+     * @param logic
      */
-    public async continueConversation(ref: ConversationReference, callback: (context: TurnContext) => Promise<void>): Promise<void> {
+    public async continueConversation(reference: ConversationReference, logic: (context: TurnContext) => Promise<void>): Promise<void> {
         return Promise.reject(new Error('The method [continueConversation] is not supported yet.'));
     }
 
@@ -190,6 +190,9 @@ export class RocketChatAdapter extends BotAdapter {
                 this.errorHandler('Failed to subscribe to messages', error, RocketChatExitCode.SubscribeToMessagesFailed);
             })
             .then(() => {
+
+                driver.sendToRoomId("I'm alive!", "GENERAL");
+
                 const options = {
                     rooms:     this.options.rooms,
                     allPublic: false,
@@ -237,10 +240,10 @@ export class RocketChatAdapter extends BotAdapter {
 
         // Convert RocketChat message to Botkit activity object.
         let activity = {
-            id:           message._id,
-            timestamp:    message.ts.$date,
-            channelId:    message.rid,
-            from:         { id: message.u._id, name: message.u.username },
+            id:        message._id,
+            timestamp: message.ts.$date,
+            channelId: message.rid,
+            from:      { id: message.u._id, name: message.u.username },
         } as Activity;
 
         if (rcRoomType == RocketChatRoomType.Event)
@@ -282,10 +285,18 @@ export class RocketChatAdapter extends BotAdapter {
             {
                 activity.recipient = {   id: this.rcBotInfo._id,
                                        name: this.rcBotInfo.username };
+
+                // `conversation.id` is the identity of BotkitConversation.
+                // @ts-ignore ignore missing fields
+                activity.conversation = { id: `${message.rid}-${message.u._id}` };
+            }
+            else
+            {
+                // `conversation.id` is the identity of BotkitConversation.
+                // @ts-ignore ignore missing fields
+                activity.conversation = { id: message.rid };
             }
 
-            // @ts-ignore ignore missing fields
-            activity.conversation = { id: message._id };
             activity.text = message.msg;
         }
 
