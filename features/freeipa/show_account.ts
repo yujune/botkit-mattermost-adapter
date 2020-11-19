@@ -1,10 +1,11 @@
 import { Botkit, BotkitConversation } from "botkit";
-const fetch = require("node-fetch");
 import exe_stackstorm_api from "./lib/sharedcode";
 
 module.exports = (controller: Botkit) => {
 
     var username: string;
+    var personalemail: string;
+    var password_valid_days: number;
 
     let convo_show = new BotkitConversation('convo_show', controller); // controller is the robot 
 
@@ -13,7 +14,19 @@ module.exports = (controller: Botkit) => {
             pattern: "yes",
             type: "string",
             handler: async (response_text, convo, bot, full_message) => {
-                await bot.say("Pleaseddd go to the link below to change your password. Thank you! :smile: \n https://selfservice.sige.la/");
+
+
+                if (personalemail != undefined) {
+                    personalemail = personalemail[0];
+                    await bot.say("Okay, I will send an email to " + personalemail + " in a few seconds.");
+                    let action_email_data = { 'action': 'freeipa.action_send_reminder', "parameters": { "receiver_name": username, "receiver_email": personalemail, "passw_daysleft": password_valid_days } };  //JSON.stringtify will convert it to json string
+                    let string_action_email = JSON.stringify(action_email_data);
+                    let email_response = await exe_stackstorm_api(string_action_email, 6);
+                    await bot.say(email_response['result']['result']);
+
+                } else {
+                    await bot.say("I cannot find your email address in FreeIPA. Please contact your admin asap!");
+                }
             }
         },
         {
@@ -55,15 +68,17 @@ module.exports = (controller: Botkit) => {
         let status = account_status['result']['result']['status'];
         let password_expired_date = account_status['result']['result']['password_expired_date'];
         let last_failed_attempted = account_status['result']['result']['last_failed_attempted'];
-        let password_valid_days = account_status['result']['result']['password_valid_days'];
         let failed_password_attempted = account_status['result']['result']['failed_password_attempted'];
         let max_password_failure = account_status['result']['result']['max_password_failure'];
         let chances_left = account_status['result']['result']['chances_left'];
+        password_valid_days = account_status['result']['result']['password_valid_days'];
+        personalemail = account_status['result']['result']['personalemail']
 
         if (name == undefined) {
             await bot.say("Hello, " + username + ". I can't find your FreeIPA details. Please make sure you already have a FreeIPA account registered.")
 
         } else {
+
             await bot.say('Here you go! This is your FreeIPA account details. :grin: ' +
                 '```Username : ' + name + '\n' +
                 'Status : ' + status + '\n' +

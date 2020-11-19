@@ -24,12 +24,15 @@ module.exports = (controller: Botkit) => {
 
                 if (execution_status == "succeeded") {
 
-                    let personalemail = account_status['result']['result']['personalemail'][0];
-                    await bot.say(personalemail);
+                    let personalemail = account_status['result']['result']['personalemail'];
 
-                    let password_valid_days = account_status['result']['result']['password_valid_days'];
+                    if (personalemail != undefined) {
 
-                    if (personalemail != 'undefined') {
+                        personalemail = personalemail[0];
+
+                        let password_valid_days = account_status['result']['result']['password_valid_days'];
+
+                        await bot.say("I will sent to " + personalemail + " in a few seconds.");
 
                         let action_email_data = { 'action': 'freeipa.action_send_reminder', "parameters": { "receiver_name": username, "receiver_email": personalemail, "passw_daysleft": password_valid_days } };  //JSON.stringtify will convert it to json string
                         let string_action_email = JSON.stringify(action_email_data);
@@ -37,11 +40,14 @@ module.exports = (controller: Botkit) => {
                         //it needs 6 seconds to wait because action_send_reminder action need at least 5 seconds to process
                         let email_response = await exe_stackstorm_api(string_action_email, 6);
 
+                        //success message
                         await bot.say(email_response['result']['result']);
 
                     } else {
                         await bot.say("You did not provide your email in FreeIPA account. I can't send you the link.");
                     }
+                } else {
+                    await bot.say("Hey! Wait a minute. " + account_status['result']['result']);
                 }
             }
         },
@@ -67,6 +73,7 @@ module.exports = (controller: Botkit) => {
 
     controller.hears("change password", "message", async (bot, message) => {
 
+        // '?' is the Optional Chaining 
         username = message?.reference?.user?.name!; // ! =  tells TypeScript that even though something looks like it could be null, it can trust you that it's not
 
         await bot.beginDialog('change_password');
