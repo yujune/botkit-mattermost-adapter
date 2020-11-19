@@ -2,7 +2,8 @@
   "dependencies": {
     "@rocket.chat/sdk": "^0.2.9-2",
     "botkit": "^4.10.0",
-    "dotenv": "^8.2.0"
+    "dotenv": "^8.2.0",
+    "node-fetch": "^2.6.1"
   },
   "scripts": {
     "start": "./node_modules/.bin/tsc && node dist/bot.js"

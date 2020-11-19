@@ -22,10 +22,8 @@ const controller = new Botkit({
 controller.ready(() => {
 
     controller.loadModules(__dirname + '/features');
-
-    // controller.hears('.*', 'message', async(bot, message) => {
-    //     await bot.reply(message, 'I hear: ' + message.text);
-    // });
+    controller.loadModules(__dirname + '/features/freeipa');
+    controller.loadModules(__dirname + '/features/freeipa/lib');
 
     controller.on(RocketChatEvent.Invite, async (bot, event) => {
         // @ts-ignore
