@@ -55,7 +55,6 @@ module.exports = (controller: Botkit) => {
     controller.hears('show', 'message', async (bot, message) => {
 
         username = message?.reference?.user?.name!;
-        username = username.substring(1); //remove the '@' in the string
 
         let data = { 'action': 'freeipa.action_show_userinfo', "parameters": { "user_id": username } };  //JSON.stringtify will convert it to json string
         let string_data = JSON.stringify(data);

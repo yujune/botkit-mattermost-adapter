@@ -72,6 +72,7 @@ export class MatterMostAdapter extends BotAdapter {
         this.userTyping = this.userTyping.bind(this);
         this.userAdded = this.userAdded.bind(this);
         this.userRemoved = this.userRemoved.bind(this);
+        this.postDeleted = this.postDeleted.bind(this);
 
     }
 
@@ -184,12 +185,11 @@ export class MatterMostAdapter extends BotAdapter {
         this.client.on('loggedIn', this.loggedIn);
         this.client.on('connected', this.onConnected);
         this.client.on('message', this.message);
-        // this.client.on('profilesLoaded', this.profilesLoaded);
         this.client.on('user_added', this.userAdded);
         this.client.on('user_removed', this.userRemoved);
         this.client.on('typing', this.userTyping);
         this.client.on('error', this.error);
-
+        this.client.on('post_deleted', this.postDeleted);
     }
 
     // /**
@@ -245,7 +245,7 @@ export class MatterMostAdapter extends BotAdapter {
     //  */
     private async activityToMatterMost(activity: Partial<Activity>): Promise<any> {
         if (activity.channelId) {
-            console.log("I'm here!");
+
             const mmRoomInfo = this.mmRoomInfo[activity.channelId!];
             if (mmRoomInfo && mmRoomInfo.hasOwnProperty('ro') && mmRoomInfo.ro)
                 throw new Error('Room is read-only.');
@@ -262,10 +262,16 @@ export class MatterMostAdapter extends BotAdapter {
         if (activity.from && activity.recipient)
             msgToSend = `@${activity.recipient.name} ${msgToSend}`;
 
+        // according to mattermost api documents, to invoke interactive message,
+        // you should assign {attachments:[...]} object to the 'props' key value
+        let mmattachments = { attachments: activity.attachments };
+
+        //console.log('mmattachments =>' + JSON.stringify(mmattachments));
+
         // @ts-ignore ignore missing fields
         const mmMessage = {
             message: msgToSend,
-            attachments: activity.attachments || null
+            props: mmattachments || null
         };
 
         return await this.client.postMessage(mmMessage, activity.channelId!);
@@ -303,24 +309,17 @@ export class MatterMostAdapter extends BotAdapter {
     }
 
     private userTyping(msg: any) {
-        console.log('Someone is typing...', msg);
+        //console.log('Someone is typing...', msg);
         return true;
     }
 
     private message(msg: any) {
 
-        console.log("message coming...", msg);
+        console.log("message, ", msg);
 
         const mmPost = JSON.parse(msg.data.post);
 
         if (mmPost.user_id === this.mmBotkit.id) { return; } // Ignore our own output
-
-        console.log(`From: ${mmPost.user_id}, To: ${this.mmBotkit.id}`);
-
-        let messageType = this.getMatterMostChannelType(msg);
-
-        // let sender_name = msg.data.sender_name
-        // sender_name.substring(0);
 
         // Convert RocketChat message to Botkit activity object.
         let activity = {
@@ -329,7 +328,6 @@ export class MatterMostAdapter extends BotAdapter {
             channelId: mmPost.channel_id,
             from: { id: mmPost.user_id, name: msg.data.sender_name.substring(1) },
         } as Activity;
-
 
         activity.type = ActivityTypes.Message;
         if (msg.editedBy) {
@@ -346,9 +344,7 @@ export class MatterMostAdapter extends BotAdapter {
             name: this.mmBotkit.username
         };
 
-
         activity.text = mmPost.message;
-
 
         if (msg.attachments) {
             activity.attachments = [];
@@ -367,38 +363,16 @@ export class MatterMostAdapter extends BotAdapter {
             });
     }
 
-
     private userRemoved(msg: any) {
-        // update channels when this bot is removed from a channel
-        //     if (msg.broadcast.user_id === this.self.id) {
-        //       this.client.loadChannels();
-        //   }
-        //     try {
-        //       const mmUser = this.client.getUserByID(msg.data.user_id);
-        //       const user = this.robot.brain.userForId(mmUser.id);
-        //       user.room = msg.broadcast.channel_id;
-        //       this.receive(new LeaveMessage(user));
-        //       return true;
-        //     } catch (error) {
-        //       return false;
-        //   }
+        //coming soon
     }
 
     private userAdded(msg: any) {
-        // update channels when this bot is added to a new channel
-        //     if (msg.data.user_id === this.self.id) {
-        //       this.client.loadChannels();
-        //   }
-        //     try {
-        //       const mmUser = this.client.getUserByID(msg.data.user_id);
-        //       this.userChange(mmUser);
-        //       const user = this.robot.brain.userForId(mmUser.id);
-        //       user.room = msg.broadcast.channel_id;
-        //       this.receive(new EnterMessage(user));
-        //       return true;
-        //     } catch (error) {
-        //       return false;
-        //   }
+        // coming soon
+    }
+
+    private postDeleted(msg: any) {
+        // coming soon
     }
 
 }
