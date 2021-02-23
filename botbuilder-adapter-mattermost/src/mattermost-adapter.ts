@@ -3,7 +3,7 @@ import { Activity, ActivityTypes, BotAdapter, ConversationReference, ResourceRes
 import { MatterMostBotWorker } from './mattermost-bot-worker';
 import { MatterMostAdapterOptions } from './mattermost-adapter-options';
 import { MatterMostRoomType, MatterMostEvent, MatterMostExitCode } from './mattermost-data-types';
-//import { MatterMostClient } from 'mattermost-client';
+//import  { MatterMostClient }  from 'mattermost-client';
 
 const MatterMostClient = require('mattermost-client');
 
@@ -93,7 +93,63 @@ export class MatterMostAdapter extends BotAdapter {
      * @param logic A bot logic function in the form `async(context) => { ... }`
      */
     public async processActivity(req: any, res: any, logic: (context: TurnContext) => Promise<void>): Promise<void> {
-        return Promise.reject(new Error('The method [processActivity] is not supported yet.'));
+        //console.log("PROCESS ACTIVITY\nREQ\n===\n", req, "\nRES\n===\n", res);
+        let event:any = req.body;
+
+        console.log("req: " , event);
+
+        console.log("post_id: " , event.post_id);
+
+        // let activity = {
+        //     id: event.post_id,
+        //     timestamp: new Date(),
+        //     channelId: event.channel_id,
+        //     from: { id: event.user_id, name: event.user_name },
+        //     recipient: { id: null },
+        //     channelData: event,
+        //     type: ActivityTypes.Event,
+        //     text: null
+        // } as Activity;
+
+        if (event.user_id === this.mmBotkit.id) { return; } // Ignore bot own output
+
+        let activity = {
+            id: event.post_id,
+            timestamp: new Date(),
+            channelId: event.channel_id,
+            from: { id: event.user_id, name: event.user_name },
+        } as Activity;
+
+        activity.type = ActivityTypes.Message;
+
+        switch (event.type){
+
+            case 'button':
+                activity.text = event.context.text;
+                console.log("Button text: " + activity.text);
+                break;
+
+            default: activity.text = event.type;
+
+        }
+
+        // `conversation.id` is the identity of BotkitConversation.
+        // @ts-ignore ignore missing fields
+        activity.conversation = { id: `${event.channel_id}-${event.user_id}` };
+
+        activity.recipient = {
+            id: this.mmBotkit.id,
+            name: this.mmBotkit.username
+        };
+
+        const context = new TurnContext(this, activity);
+        this.runMiddleware(context, this.logic)
+            .catch((error) => {
+                this.errorHandler('Failed to run middleware', error);
+            });
+
+        //return Promise.resolve();
+        //return Promise.reject(new Error('The method [processActivity] is not supported yet.'));
     }
 
     /**
@@ -108,7 +164,7 @@ export class MatterMostAdapter extends BotAdapter {
 
     /**
      * Standard BotBuilder adapter method to send a message from the bot to the
-     * messaging API. * [BotBuilder reference docs](https://docs.microsoft.com/en-us/javascript/api/botbuilder-core/botadapter?view=botbuilder-ts-latest#sendactivities).
+     * messaging API （ Mattermost ). * [BotBuilder reference docs](https://docs.microsoft.com/en-us/javascript/api/botbuilder-core/botadapter?view=botbuilder-ts-latest#sendactivities).
      * @param context A TurnContext representing the current incoming message and environment.
      * @param activities An array of outgoing activities to be sent back to the messaging API.
      */
@@ -361,6 +417,7 @@ export class MatterMostAdapter extends BotAdapter {
             .catch((error) => {
                 this.errorHandler('Failed to run middleware', error);
             });
+
     }
 
     private userRemoved(msg: any) {

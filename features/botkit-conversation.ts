@@ -12,46 +12,55 @@ module.exports = (controller: Botkit) => {
 
     //ask a question, store the response in 'name'
     convo.ask({
-        attachments: [
-            {
-                title: 'Do you want to proceed?',
-                type: "interactive_message",
-                callback_id: '123',
-                attachment_type: 'default',
-                actions: [
-                    {
-                        name: "yes",
-                        text: "Yes",
-                        value: "yes",
-                        type: "button",
-                    },
-                    {
-                        name: "no",
-                        text: "No",
-                        value: "no",
-                        type: "button",
-                    }
-                ]
+      "attachments": [
+      {
+        "pretext": "This is the attachment pretext.",
+        "text": "This is the attachment text.",
+        "type": "interactive_message",
+        "actions": [
+          {
+            "id": "test",
+            "name": "Test1",
+            "type": "button",
+            "integration": {
+              "url": "http://10.13.18.140:3000/api/messages",
+              "context": {
+                "text": "button1",
+                "action": "do_something_ephemeral"
+              }
             }
+          }, {
+            "id": "test2",
+            "name": "Test2",
+            "integration": {
+              "url": "http://10.13.18.140:3000/api/messages",
+              "context": {
+                "action": "do_something_update"
+              }
+            }
+          }
         ]
-    }
-        , [
-            {
-                pattern: 'no',
-                handler: async (response, convo, bot) => {
-                    // if user says no, go back to favorite color.
-                    await bot.say("great");
-                    await convo.gotoThread('favorite_color');
+      }
+    ]        
+    },
+    [
+      {
+        pattern: "button1",
+        handler: async (response, convo, bot) => {
 
-                }
-            },
-            {
-                default: true,
-                handler: async (response, convo, bot, full_message) => {
-                    // do nothing, allow convo to complete.
-                }
-            }
-        ], "ans");
+            await bot.say("Alright, let me sent the link to your email (button1 click events).");
+        }
+    },
+    {
+      default: true,
+      handler: async (response, convo, bot) => {
+
+          await bot.say('I do not understand your response from your button clicks! :dizzy_face:');
+          return await convo.repeat();
+
+      }
+  }
+    ],{ key: "testbutton" });
 
     // convo.ask({
     //     attachments: [
@@ -94,33 +103,33 @@ module.exports = (controller: Botkit) => {
     // ], "ans");
 
     // use add action to switch to a different thread, defined below...
-    convo.addAction('favorite_color');
+    // convo.addAction('favorite_color');
 
-    // add a message and a prompt to a new thread called `favorite_color`
-    convo.addMessage('Awesome {{vars.name}}!', 'favorite_color');
-    convo.addQuestion('Now, what is your favorite color? {{vars.ans}}..', async (response, convo, bot) => {
-        console.log(`user favorite color is ${response}`);
-    }, 'color', 'favorite_color');
+    // // add a message and a prompt to a new thread called `favorite_color`
+    // convo.addMessage('Awesome {{vars.name}}!', 'favorite_color');
+    // convo.addQuestion('Now, what is your favorite color? {{vars.ans}}..', async (response, convo, bot) => {
+    //     console.log(`user favorite color is ${response}`);
+    // }, 'color', 'favorite_color');
 
-    // go to a confirmation
-    convo.addAction('confirmation', 'favorite_color');
+    // // go to a confirmation
+    // convo.addAction('confirmation', 'favorite_color');
 
-    // do a simple conditional branch looking for user to say "no"
-    convo.addQuestion('Your name is {{vars.name}} and your favorite color is {{vars.color}}. Is that right?', [
-        {
-            pattern: 'no',
-            handler: async (response, convo, bot) => {
-                // if user says no, go back to favorite color.
-                await convo.gotoThread('favorite_color');
-            }
-        },
-        {
-            default: true,
-            handler: async (response, convo, bot, full_message) => {
-                // do nothing, allow convo to complete.
-            }
-        }
-    ], 'confirm', 'confirmation');
+    // // do a simple conditional branch looking for user to say "no"
+    // convo.addQuestion('Your name is {{vars.name}} and your favorite color is {{vars.color}}. Is that right?', [
+    //     {
+    //         pattern: 'no',
+    //         handler: async (response, convo, bot) => {
+    //             // if user says no, go back to favorite color.
+    //             await convo.gotoThread('favorite_color');
+    //         }
+    //     },
+    //     {
+    //         default: true,
+    //         handler: async (response, convo, bot, full_message) => {
+    //             // do nothing, allow convo to complete.
+    //         }
+    //     }
+    // ], 'confirm', 'confirmation');
 
     controller.addDialog(convo);
 

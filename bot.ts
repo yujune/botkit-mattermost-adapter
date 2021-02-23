@@ -22,3 +22,8 @@ controller.ready(() => {
     controller.loadModules(__dirname + '/features/freeipa');
     controller.loadModules(__dirname + '/features/freeipa/lib');
 });
+
+controller.on('event', async(bot, message) => {
+    console.log(message);
+});
+
