@@ -100,17 +100,6 @@ export class MatterMostAdapter extends BotAdapter {
 
         console.log("post_id: " , event.post_id);
 
-        // let activity = {
-        //     id: event.post_id,
-        //     timestamp: new Date(),
-        //     channelId: event.channel_id,
-        //     from: { id: event.user_id, name: event.user_name },
-        //     recipient: { id: null },
-        //     channelData: event,
-        //     type: ActivityTypes.Event,
-        //     text: null
-        // } as Activity;
-
         if (event.user_id === this.mmBotkit.id) { return; } // Ignore bot own output
 
         let activity = {
@@ -123,10 +112,15 @@ export class MatterMostAdapter extends BotAdapter {
         activity.type = ActivityTypes.Message;
 
         switch (event.type){
-
+            //mattermost button
             case 'button':
                 activity.text = event.context.text;
                 console.log("Button text: " + activity.text);
+                break;
+            //matermost drop down menu
+            case 'select':
+                activity.text = event.context.text;
+                console.log("Menu text: " + activity.text);
                 break;
 
             default: activity.text = event.type;

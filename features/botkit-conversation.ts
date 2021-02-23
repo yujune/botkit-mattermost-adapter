@@ -18,9 +18,10 @@ module.exports = (controller: Botkit) => {
         "text": "This is the attachment text.",
         "type": "interactive_message",
         "actions": [
+          //button1
           {
-            "id": "test",
-            "name": "Test1",
+            "id": "button1",
+            "name": "button1",
             "type": "button",
             "integration": {
               "url": "http://10.13.18.140:3000/api/messages",
@@ -29,15 +30,44 @@ module.exports = (controller: Botkit) => {
                 "action": "do_something_ephemeral"
               }
             }
-          }, {
-            "id": "test2",
-            "name": "Test2",
+          }, 
+          //default button
+          {
+            "id": "default",
+            "name": "default",
+            "type": "button",
             "integration": {
               "url": "http://10.13.18.140:3000/api/messages",
               "context": {
                 "action": "do_something_update"
               }
             }
+          },
+          //menu
+          {
+            "id": "action_options",
+            "name": "Select an option...",
+            "integration": {
+              "url": "http://10.13.18.140:3000/api/messages",
+              "context": {
+                "action": "do_something"
+              }
+            },
+            "type": "select",
+            "options": [
+                    {
+                        "text": "Option1",
+                        "value": "opt1"
+                    },
+                    {
+                        "text": "Option2",
+                        "value": "opt2"
+                    },
+                    {
+                        "text": "Option3",
+                        "value": "opt3"
+                    }
+            ]
           }
         ]
       }
@@ -50,16 +80,16 @@ module.exports = (controller: Botkit) => {
 
             await bot.say("Alright, let me sent the link to your email (button1 click events).");
         }
-    },
-    {
-      default: true,
-      handler: async (response, convo, bot) => {
+      },
+      {
+        default: true,
+        handler: async (response, convo, bot) => {
 
-          await bot.say('I do not understand your response from your button clicks! :dizzy_face:');
-          return await convo.repeat();
+            await bot.say('I do not understand your response from your button clicks! :dizzy_face:');
+            return await convo.repeat();
 
+        }
       }
-  }
     ],{ key: "testbutton" });
 
     // convo.ask({
