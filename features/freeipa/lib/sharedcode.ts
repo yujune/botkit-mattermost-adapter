@@ -38,6 +38,27 @@ export default async function exe_stackstorm_api(data: string, waiting_seconds: 
 
 }
 
+export async function disable_interactive_msg(post_id: string,icon: string,msg: string){
+
+    const mattermost_host = process.env.MATTERMOST_HOST
+    const mattermost_port = process.env.MATTERMOST_HTTP_PORT
+    const access_token = process.env.MATTERMOST_ACCESS_TOKEN
+    const data = {"id":post_id,"message":msg + "\n" + icon,"has_reactions":true}
+    const matermost_api_url = "http://" + mattermost_host +  ":" + mattermost_port +"/api/v4/posts/" + post_id
+
+    let result = await fetch(matermost_api_url,{
+        method: 'PUT',
+        headers: {
+            'Authorization': 'Bearer ' + access_token,
+            'content-type': 'application/json'
+        },
+        body: JSON.stringify(data) // parses JSON response into native JavaScript objects
+    });
+
+    return result.json(); 
+
+}
+
 function wait(seconds: number) {
 
     return new Promise((resolve) => {

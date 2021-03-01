@@ -1,6 +1,9 @@
 // this is the file that mainly used for testing
 
 import { Botkit, BotkitConversation } from "botkit";
+//import {disable_interactive_msg} from "freeipa/lib/sharedcode"
+
+import {disable_interactive_msg} from "../features/freeipa/lib/sharedcode";
 
 // module has an exports properties
 module.exports = (controller: Botkit) => {
@@ -14,38 +17,39 @@ module.exports = (controller: Botkit) => {
     convo.ask({
       "attachments": [
       {
-        "pretext": "This is the attachment pretext.",
-        "text": "This is the attachment text.",
+        "pretext": "Hi, What can I do for your today? ",
+        "text": "Please Select the following options.",
         "type": "interactive_message",
         "actions": [
-          //button1
+          // //button1
           {
-            "id": "button1",
-            "name": "button1",
+            "id": "actionoptions",
+            "name": "Update",
             "type": "button",
             "integration": {
               "url": "http://10.13.18.140:3000/api/messages",
               "context": {
-                "text": "button1",
+                "text": "update",
                 "action": "do_something_ephemeral"
               }
             }
           }, 
           //default button
           {
-            "id": "default",
-            "name": "default",
+            "id": "warning",
+            "name": "warning",
             "type": "button",
             "integration": {
               "url": "http://10.13.18.140:3000/api/messages",
               "context": {
+                "text": "warning",
                 "action": "do_something_update"
               }
             }
           },
           //menu
           {
-            "id": "action_options",
+            "id": "menu",
             "name": "Select an option...",
             "integration": {
               "url": "http://10.13.18.140:3000/api/messages",
@@ -72,13 +76,45 @@ module.exports = (controller: Botkit) => {
         ]
       }
     ]        
-    },
+  },
     [
       {
-        pattern: "button1",
-        handler: async (response, convo, bot) => {
+        pattern: "update",
+        handler: async (response, convo, bot,full_message) => {
 
-            await bot.say("Alright, let me sent the link to your email (button1 click events).");
+          // get the post id from full_message parameters.
+          const postId : string = full_message.incoming_message.id!;
+          const update_icon : string = ":white_check_mark:";
+          const success_msg : string = "Updated Sucessfully.";
+
+          await disable_interactive_msg(postId,update_icon,success_msg);
+
+        }
+      },
+      {
+        pattern: "warning",
+        handler: async (response, convo, bot,full_message) => {
+
+          // get the post id from full_message parameters.
+          const postId: string = full_message.incoming_message.id!
+          const warning_icon : string = ":warning:";
+          const warning_msg : string = "Warning message...This is a warning button.";
+
+          await disable_interactive_msg(postId,warning_icon,warning_msg);
+
+        }
+      },
+      {
+        pattern: "opt1",
+        handler: async (response, convo, bot,full_message) => {
+
+          // get the post id from full_message parameters.
+          const postId: string = full_message.incoming_message.id!
+          const opt1_icon : string = ":one:";
+          const opt1_msg : string = "You have selected options 1";
+
+          await disable_interactive_msg(postId,opt1_icon,opt1_msg);
+
         }
       },
       {
@@ -165,8 +201,7 @@ module.exports = (controller: Botkit) => {
 
     controller.hears('hello dear', 'message', async (bot, message) => {
 
-
-        await bot.say("message is =>" + JSON.stringify(message.incoming_message));
+        //await bot.say("message is =>" + JSON.stringify(message.incoming_message));
         //console.log("mmmmmmmmmmmmmmmmm" + JSON.stringify(message));
         // await suspend the async function until promise from async is fulfilled.
         await bot.beginDialog('convo');

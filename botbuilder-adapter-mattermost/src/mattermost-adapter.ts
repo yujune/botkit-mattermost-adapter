@@ -119,7 +119,7 @@ export class MatterMostAdapter extends BotAdapter {
                 break;
             //matermost drop down menu
             case 'select':
-                activity.text = event.context.text;
+                activity.text = event.context.selected_option;
                 console.log("Menu text: " + activity.text);
                 break;
 

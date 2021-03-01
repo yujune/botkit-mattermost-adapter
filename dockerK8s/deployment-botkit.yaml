@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: botkit-mattermost-deployment
+  labels:
+    app: botkit-mattermost
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: botkit-mattermost
+  template:
+    metadata:
+      labels:
+        app: botkit-mattermost
+    spec:
+      containers:
+      - name: botkit-mattermost
+        image: yujune/botkit-mattermost:1.0
+        ports:
+        - containerPort: 3000
